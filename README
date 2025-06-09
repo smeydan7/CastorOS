@@ -1,0 +1,22 @@
+
+Building COS requires:
+ - SCons 4.0+
+ - Clang 15
+ - Qemu for simulation
+
+To build the source code run:
+# scons
+
+To clean the source tree run:
+# scons -c
+
+Building the documentation requires:
+ - Doxygen
+ - Graphviz
+ - dia
+ - Inkscape or png2pdf
+
+To build the documentation run the following command in the root folder:
+# doxygen docs/Doxyfile
+
+This will place the resulting HTML documentation in docs/html.

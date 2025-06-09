@@ -1,0 +1,23 @@
+import sys
+
+Import('env')
+
+cross_env = env.Clone()
+
+src = [ ]
+
+src_common = [
+    "date.c"
+]
+
+src.append(env["CRTBEGIN"])
+src.append(src_common)
+src.append(env["CRTEND"])
+
+cross_env.Append(LINKFLAGS = ['-nostdlib'])
+cross_env.Append(CPPFLAGS = ['-fno-builtin', '-nostdinc'])
+cross_env.Append(CPPPATH = ['#build/include'])
+cross_env.Append(LIBPATH = ['#build/lib/libc'], LIBS = ['c'])
+
+cross_env.Program("date", src)
+

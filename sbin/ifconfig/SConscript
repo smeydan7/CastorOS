@@ -1,0 +1,23 @@
+import sys
+
+Import('env')
+
+ifconfig_env = env.Clone()
+
+src = [ ]
+
+src_common = [
+    "ifconfig.c"
+]
+
+src.append(env["CRTBEGIN"])
+src.append(src_common)
+src.append(env["CRTEND"])
+
+ifconfig_env.Append(LINKFLAGS = ['-nostdlib'])
+ifconfig_env.Append(CPPFLAGS = ['-nostdinc'])
+ifconfig_env.Append(CPPPATH = ['#build/include'])
+ifconfig_env.Append(LIBPATH = ['#build/lib/libc'], LIBS = ['c'])
+
+ifconfig_env.Program("ifconfig", src)
+

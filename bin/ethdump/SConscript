@@ -1,0 +1,23 @@
+import sys
+
+Import('env')
+
+ethdump_env = env.Clone()
+
+src = [ ]
+
+src_common = [
+    "ethdump.c"
+]
+
+src.append(env["CRTBEGIN"])
+src.append(src_common)
+src.append(env["CRTEND"])
+
+ethdump_env.Append(LINKFLAGS = ['-nostdlib'])
+ethdump_env.Append(CPPFLAGS = ['-nostdinc'])
+ethdump_env.Append(CPPPATH = ['#build/include'])
+ethdump_env.Append(LIBPATH = ['#build/lib/libc'], LIBS = ['c'])
+
+ethdump_env.Program("ethdump", src)
+

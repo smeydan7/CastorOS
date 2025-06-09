@@ -1,0 +1,23 @@
+import sys
+
+Import('env')
+
+sysctl_env = env.Clone()
+
+src = [ ]
+
+src_common = [
+    "sysctl.c"
+]
+
+src.append(env["CRTBEGIN"])
+src.append(src_common)
+src.append(env["CRTEND"])
+
+sysctl_env.Append(LINKFLAGS = ['-nostdlib'])
+sysctl_env.Append(CPPFLAGS = ['-nostdinc'])
+sysctl_env.Append(CPPPATH = ['#build/include'])
+sysctl_env.Append(LIBPATH = ['#build/lib/libc'], LIBS = ['c'])
+
+sysctl_env.Program("sysctl", src)
+

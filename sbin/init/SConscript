@@ -1,0 +1,23 @@
+import sys
+
+Import('env')
+
+init_env = env.Clone()
+
+src = [ ]
+
+src_common = [
+    "init.c",
+]
+
+src.append(env["CRTBEGIN"])
+src.append(src_common)
+src.append(env["CRTEND"])
+
+init_env.Append(LINKFLAGS = ['-nostdlib'])
+init_env.Append(CPPFLAGS = ['-nostdinc', '-mno-sse'])
+init_env.Append(CPPPATH = ['#build/include'])
+init_env.Append(LIBPATH = ['#build/lib/libc'], LIBS = ['c'])
+
+init_env.Program("init", src)
+

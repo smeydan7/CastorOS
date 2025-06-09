@@ -1,0 +1,23 @@
+import sys
+
+Import('env')
+
+false_env = env.Clone()
+
+src = [ ]
+
+src_common = [
+    "false.c"
+]
+
+src.append(env["CRTBEGIN"])
+src.append(src_common)
+src.append(env["CRTEND"])
+
+false_env.Append(LINKFLAGS = ['-nostdlib'])
+false_env.Append(CPPFLAGS = ['-fno-builtin', '-nostdinc'])
+false_env.Append(CPPPATH = ['#build/include'])
+false_env.Append(LIBPATH = ['#build/lib/libc'], LIBS = ['c'])
+
+false_env.Program("false", src)
+

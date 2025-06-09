@@ -1,0 +1,23 @@
+import sys
+
+Import('env')
+
+ethinject_env = env.Clone()
+
+src = [ ]
+
+src_common = [
+    "ethinject.c"
+]
+
+src.append(env["CRTBEGIN"])
+src.append(src_common)
+src.append(env["CRTEND"])
+
+ethinject_env.Append(LINKFLAGS = ['-nostdlib'])
+ethinject_env.Append(CPPFLAGS = ['-nostdinc'])
+ethinject_env.Append(CPPPATH = ['#build/include'])
+ethinject_env.Append(LIBPATH = ['#build/lib/libc'], LIBS = ['c'])
+
+ethinject_env.Program("ethinject", src)
+
