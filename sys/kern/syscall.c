@@ -126,6 +126,31 @@ Syscall_Spawn(uint64_t user_path, uint64_t user_argv)
 
     /* XXXFILLMEIN: Load the ELF headers into the page. */
 
+    file = VFS_Lookup(path);
+
+    if (file == NULL) {
+	    PAlloc_Release(arg);
+	    PAlloc_Release(pg);
+	    return SYSCALL_PACK(ENOENT, 0);
+    }
+
+    if (VFS_Open(file) != 0) {
+	    int err = errno;
+	    PAlloc_Release(arg);
+	    PAlloc_Release(pg);
+	    return SYSCALL_PACK(err, 0);
+    }
+
+    int code = VFS_Read(file, pg, 0, 1024);
+    if (code <= -1) {
+	    VFS_Close(file);
+	    PAlloc_Release(arg);
+	    PAlloc_Release(pg);
+	    return SYSCALL_PACK(EIO, 0);
+    }
+
+    /* end segment  */ 
+
     if (!Loader_CheckHeader(pg)) {
 	VFS_Close(file);
 	PAlloc_Release(pg);
