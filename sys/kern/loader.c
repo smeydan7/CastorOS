@@ -170,6 +170,27 @@ Loader_Load(Thread *thr, VNode *vn, void *buf, uint64_t len)
 
     /* XXXFILLMEIN: Load the ELF segments. */
 
+    for (int hdr_index = 0; hdr_index < ehdr->e_phnum; hdr_index++) {
+        Elf64_Phdr *hdr = &phdr[hdr_index];
+        if (hdr->p_type != PT_LOAD) {
+            continue;
+	}
+
+        LoaderLoadSegment(as,
+                          vn,
+                          hdr->p_vaddr,
+                          hdr->p_offset,
+                          hdr->p_filesz);
+
+        if (hdr->p_memsz > hdr->p_filesz) {
+            uintptr_t bss_start = hdr->p_vaddr + hdr->p_filesz;
+            uintptr_t bss_len   = hdr->p_memsz - hdr->p_filesz;
+            LoaderZeroSegment(as, bss_start, bss_len);
+        }
+    }
+
+    /* end of segment */
+
     /* Save the process entry point (i.e., _start) */
     thr->proc->entrypoint = ehdr->e_entry;
 
