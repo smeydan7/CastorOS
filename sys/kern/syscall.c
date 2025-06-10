@@ -134,11 +134,11 @@ Syscall_Spawn(uint64_t user_path, uint64_t user_argv)
 	    return SYSCALL_PACK(ENOENT, 0);
     }
 
-    if (VFS_Open(file) != 0) {
-	    int err = errno;
+    int num = VFS_Open(file);
+    if (num != 0) {
 	    PAlloc_Release(arg);
 	    PAlloc_Release(pg);
-	    return SYSCALL_PACK(err, 0);
+	    return SYSCALL_PACK(num, 0);
     }
 
     int code = VFS_Read(file, pg, 0, 1024);
@@ -149,7 +149,7 @@ Syscall_Spawn(uint64_t user_path, uint64_t user_argv)
 	    return SYSCALL_PACK(EIO, 0);
     }
 
-    /* end segment  */ 
+    /* end of segment */
 
     if (!Loader_CheckHeader(pg)) {
 	VFS_Close(file);
@@ -178,9 +178,35 @@ Syscall_Spawn(uint64_t user_path, uint64_t user_argv)
 
     /* Translate mapping for stack page */
     argstart = (char *)DMPA2VA(PMap_Translate(thr->space, MEM_USERSPACE_STKTOP - PGSIZE));
-    uintptr_t offset = sizeof(uintptr_t)*8;
+    // uintptr_t offset = sizeof(uintptr_t)*8;
 
     /* XXXFILLMEIN: Export the argument array out to the new application. */
+
+    int MAX_ARGS = 7;
+
+    char **src_argv = (char **)(arg + sizeof(uintptr_t));
+
+    uintptr_t *user_argc_ptr = (uintptr_t *)argstart;
+    uintptr_t *user_argv_ptr = user_argc_ptr + 1;
+
+    char *user_str_addr = (char *)(user_argv_ptr + MAX_ARGS);
+
+    int it = 0;
+    while (src_argv[it] != NULL) {
+	    size_t length = 1 + strlen(src_argv[it]);
+	    memcpy(user_str_addr, src_argv[it], length);
+
+	    uintptr_t child_addr = MEM_USERSPACE_STKTOP - PGSIZE + (uintptr_t)(user_str_addr - (char *)argstart);
+
+	    user_str_addr += length;
+	    user_argv_ptr[it] = child_addr;
+	    it++;
+    }
+
+    *user_argc_ptr = it;
+    user_argv_ptr[it] = 0;
+
+    /* end of segment */
 
     Sched_SetRunnable(thr);
 
