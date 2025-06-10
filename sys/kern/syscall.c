@@ -178,33 +178,29 @@ Syscall_Spawn(uint64_t user_path, uint64_t user_argv)
 
     /* Translate mapping for stack page */
     argstart = (char *)DMPA2VA(PMap_Translate(thr->space, MEM_USERSPACE_STKTOP - PGSIZE));
-    // uintptr_t offset = sizeof(uintptr_t)*8;
+    uintptr_t offset = sizeof(uintptr_t)*8;
 
     /* XXXFILLMEIN: Export the argument array out to the new application. */
 
-    int MAX_ARGS = 7;
-
-    char **src_argv = (char **)(arg + sizeof(uintptr_t));
-
-    uintptr_t *user_argc_ptr = (uintptr_t *)argstart;
-    uintptr_t *user_argv_ptr = user_argc_ptr + 1;
-
-    char *user_str_addr = (char *)(user_argv_ptr + MAX_ARGS);
+    char **in_argv = (char **)arg + 1;
+    uintptr_t *out_argc = (uintptr_t *)argstart;
+    uintptr_t *out_argv = out_argc + 1;
+    char *out_args = (char *)(out_argv + 7);
 
     int it = 0;
-    while (src_argv[it] != NULL) {
-	    size_t length = 1 + strlen(src_argv[it]);
-	    memcpy(user_str_addr, src_argv[it], length);
+    while (in_argv[it] != NULL) {
+	    size_t length = 1 + strlen(in_argv[it]);
+	    memcpy(out_args, in_argv[it], length);
 
-	    uintptr_t child_addr = MEM_USERSPACE_STKTOP - PGSIZE + (uintptr_t)(user_str_addr - (char *)argstart);
+	    uintptr_t child_addr = MEM_USERSPACE_STKTOP - PGSIZE + (uintptr_t)(out_args - (char *)argstart);
 
-	    user_str_addr += length;
-	    user_argv_ptr[it] = child_addr;
+	    out_args += length;
+	    out_argv[it] = child_addr;
 	    it++;
     }
 
-    *user_argc_ptr = it;
-    user_argv_ptr[it] = 0;
+    *out_argc = it;
+    out_argv[it] = 0;
 
     /* end of segment */
 
