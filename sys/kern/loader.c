@@ -1,5 +1,4 @@
-/*
- * Copyright (c) 2006-2023 Ali Mashtizadeh
+/* Copyright (c) 2006-2023 Ali Mashtizadeh
  * All rights reserved.
  */
 
@@ -187,9 +186,8 @@ Loader_Load(Thread *thr, VNode *vn, void *buf, uint64_t len)
             uintptr_t bss_len   = hdr->p_memsz - hdr->p_filesz;
             LoaderZeroSegment(as, bss_start, bss_len);
         }
-    }
 
-    /* end of segment */
+    }
 
     /* Save the process entry point (i.e., _start) */
     thr->proc->entrypoint = ehdr->e_entry;
@@ -278,5 +276,3 @@ Loader_LoadInit()
      */
     Panic("Unreachable: Trap_Pop() returned!\n");
 }
-
-
