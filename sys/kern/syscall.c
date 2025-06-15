@@ -5,6 +5,13 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>/*
+ * Copyright (c) 2013-2023 Ali Mashtizadeh
+ * All rights reserved.
+ */
+
+#include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <errno.h>
@@ -784,4 +791,3 @@ Syscall_Entry(uint64_t syscall, uint64_t a1, uint64_t a2,
 	    return SYSCALL_PACK(ENOSYS, 0);
     }
 }
-
