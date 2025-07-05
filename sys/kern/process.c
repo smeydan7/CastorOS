@@ -209,17 +209,26 @@ Process_Wait(Process *proc, uint64_t pid)
     Process *p = NULL;
     uint64_t status;
 
-    // XXXFILLMEIN
     /* 
      * Dummy waitpid implementation that pretends the 
      * process has already exited. Remove and replace
      * with the actual implementation from the assignment 
      * description.
      */
-    /* XXXREMOVE START */
-    ASSERT(pid != 0);
-    return SYSCALL_PACK(0, pid << 16);
-    /* XXXREMOVE END */
+    Mutex_Lock(&proc->zombieProcLock);
+    
+    if (pid != 0) {
+        p = Process_Lookup(pid);
+        while (p->procState != PROC_STATE_ZOMBIE) CV_Wait(&p->zombieProcPCV, &proc->zombieProcLock);
+        Process_Release(p);
+    } else {
+        while (TAILQ_EMPTY(&proc->zombieProc)) CV_Wait(&proc->zombieProcCV, &proc->zombieProcLock);
+        p = TAILQ_FIRST(&proc->zombieProc);
+    }
+    
+    TAILQ_REMOVE(&proc->zombieProc, p, siblingList);
+    
+    Mutex_Unlock(&proc->zombieProcLock);
 
     status = (p->pid << 16) | (p->exitCode & 0xff);
 
