@@ -3,13 +3,13 @@
  * All rights reserved.
  */
 
+ #include <stdint.h>
 #include <stdbool.h>
-#include <stdint.h>
 #include <string.h>
 
 #include <sys/cdefs.h>
-#include <sys/kassert.h>
 #include <sys/kconfig.h>
+#include <sys/kassert.h>
 #include <sys/kdebug.h>
 #include <sys/kmem.h>
 #include <sys/mp.h>
@@ -57,7 +57,19 @@ Mutex_Lock(Mutex *mtx)
      */
     ASSERT(Critical_Level() == 0);
 
-    /* XXXFILLMEIN */
+    Spinlock_Lock(&mtx->lock);
+    
+    while (mtx->status == MTX_STATUS_LOCKED) {
+        WaitChannel_Lock(&mtx->chan);
+        Spinlock_Unlock(&mtx->lock);
+        WaitChannel_Sleep(&mtx->chan);
+        Spinlock_Lock(&mtx->lock);
+    }
+    
+    mtx->status = MTX_STATUS_LOCKED;
+    mtx->owner = Sched_Current();
+    
+    Spinlock_Unlock(&mtx->lock);
 }
 
 /**
@@ -69,8 +81,18 @@ Mutex_Lock(Mutex *mtx)
 int
 Mutex_TryLock(Mutex *mtx)
 {
-    /* XXXFILLMEIN */
+    Spinlock_Lock(&mtx->lock);
 
+    if (mtx->status == MTX_STATUS_UNLOCKED) {
+        mtx->status = MTX_STATUS_LOCKED;
+        mtx->owner = Sched_Current();
+    } else if (mtx->status == MTX_STATUS_LOCKED) {
+        Spinlock_Unlock(&mtx->lock);
+        return EBUSY;
+    }
+
+    Spinlock_Unlock(&mtx->lock);
+    
     return 0;
 }
 
@@ -82,8 +104,11 @@ Mutex_TryLock(Mutex *mtx)
 void
 Mutex_Unlock(Mutex *mtx)
 {
-    /* XXXFILLMEIN */
-
+    Spinlock_Lock(&mtx->lock);
+    mtx->owner = NULL;
+    mtx->status = MTX_STATUS_UNLOCKED;
+    WaitChannel_Wake(&mtx->chan);
+    Spinlock_Unlock(&mtx->lock);
     return;
 }
 
