@@ -259,7 +259,7 @@ O2FSLoadVNode(VFS *fs, ObjID *objid)
  *
  * @return 0 on success, otherwise error code.
  */
-int
+int 
 O2FSGrowVNode(VNode *vn, uint64_t filesz)
 {
     VFS *vfs = vn->vfs;
@@ -267,20 +267,49 @@ O2FSGrowVNode(VNode *vn, uint64_t filesz)
     BNode *bn = vnEntry->buffer;
     uint64_t blkstart = (bn->size + vfs->blksize - 1) / vfs->blksize;
 
-    if (filesz > (vfs->blksize * O2FS_DIRECT_PTR))
-	return -EINVAL;
+    if (filesz > (vfs->blksize * O2FS_DIRECT_PTR * O2FS_INDIRECT_PTR))
+        return -EINVAL;
 
     for (int i = blkstart; i < ((filesz + vfs->blksize - 1) / vfs->blksize); i++) {
-	if (bn->direct[i].offset != 0)
-		continue;
 
-	uint64_t blkno = O2FSBAlloc(vfs);
-	if (blkno == 0) {
-		return -ENOSPC;
-	}
-
-	bn->direct[i].offset = blkno * vfs->blksize;
-
+        int indirect_block_unallocated = (bn->indirect[i / O2FS_DIRECT_PTR].offset == 0);
+        
+        if (indirect_block_unallocated) {
+            uint64_t blkno = O2FSBAlloc(vfs);
+            if (blkno == 0) {
+                return -ENOSPC;
+            }
+            bn->indirect[i / O2FS_DIRECT_PTR].offset = blkno * vfs->blksize;
+            bn->indirect[i / O2FS_DIRECT_PTR].device = 0;
+        }
+        
+        BufCacheEntry *ient;
+        int status = BufCache_Read(vfs->disk, bn->indirect[i / O2FS_DIRECT_PTR].offset, &ient);
+        if (status < 0) {
+            return status;
+        }
+        
+        if (indirect_block_unallocated) {
+            memset(ient->buffer, 0, vfs->blksize);
+        }
+        
+        BInd *ind = ient->buffer;
+        if (ind->direct[i % O2FS_DIRECT_PTR].offset != 0) {
+            BufCache_Release(ient);
+            continue;
+        }
+        
+        uint64_t blkno = O2FSBAlloc(vfs);
+        if (blkno == 0) {
+            BufCache_Release(ient);
+            return -ENOSPC;
+        }
+        
+        ind->direct[i % O2FS_DIRECT_PTR].offset = blkno * vfs->blksize;
+        ind->direct[i % O2FS_DIRECT_PTR].device = 0;
+        
+        BufCache_Write(ient);
+        BufCache_Release(ient);
     }
 
     DLOG(o2fs, "Growing: %d\n", filesz);
@@ -329,13 +358,21 @@ O2FSResolveBuf(VNode *vn, uint64_t b, BufCacheEntry **dentp)
     BufCacheEntry *dent;
     BNode *bn = vnent->buffer;
     int status;
-
-    status = BufCache_Read(vn->disk, bn->direct[b].offset, &dent);
-    if (status < 0)
-        return status;
-
+    
+    size_t i = b / O2FS_DIRECT_PTR;
+    size_t j = b % O2FS_DIRECT_PTR;
+    BufCacheEntry *ient;
+    
+    status = BufCache_Read(vn->disk, bn->indirect[i].offset, &ient);
+    if (status < 0) return status;
+    
+    BInd *ind = ient->buffer;
+    status = BufCache_Read(vn->disk, ind->direct[j].offset, &dent);
+    if (status < 0) return status;
+    
+    BufCache_Release(ient);
+    
     *dentp = dent;
-
     return status;
 }
 
@@ -685,4 +722,3 @@ O2FS_ReadDir(VNode *fn, void *buf, uint64_t len, uint64_t *off)
 
     return count;
 }
-
