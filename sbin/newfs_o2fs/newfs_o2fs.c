@@ -122,12 +122,14 @@ AppendEmpty(void)
 	return AppendBlock(NULL, 0);
 }
 
-ObjID *AddFile(const char *file)
+ObjID *AddFile(const char *file) 
 {
     int i = 0;
     int fd;
     ObjID *id = malloc(sizeof(ObjID));
     BNode node;
+    BInd indirect = {0};  // Indirect block structure
+    int directIndex = 0;  // Track position within indirect block
 
     memset(id, 0, sizeof(*id));
     memset(&node, 0, sizeof(node));
@@ -138,24 +140,41 @@ ObjID *AddFile(const char *file)
     // Copy file
     fd = open(file, O_RDONLY);
     if (fd < 0) {
-	perror("Cannot open file");
-	exit(1);
+        perror("Cannot open file");
+        exit(1);
     }
+    
     while (1) {
-	int len = read(fd, tempbuf, blockSize);
-	if (len < 0) {
-	    perror("File read error");
-	    exit(1);
-	}
-	if (len == 0) {
-	    break;
-	}
+        int len = read(fd, tempbuf, blockSize);
+        if (len < 0) {
+            perror("File read error");
+            exit(1);
+        }
+        if (len == 0) {
+            break;
+        }
 
-	node.direct[i].device = 0;
-	node.direct[i].offset = AppendBlock(tempbuf, len);
-	node.size += (uint64_t)len;
-	i += 1;
+        indirect.direct[directIndex].device = 0;
+        indirect.direct[directIndex].offset = AppendBlock(tempbuf, len);
+        node.size += (uint64_t)len;
+        directIndex++;
+        
+        if (directIndex == O2FS_INDIRECT_PTR) {
+
+            node.indirect[i].device = 0;
+            node.indirect[i].offset = AppendBlock(&indirect, sizeof(indirect));
+            
+            memset(&indirect, 0, sizeof(indirect));
+            i++;
+            directIndex = 0;
+        }
     }
+    
+    if (directIndex > 0) {
+        node.indirect[i].device = 0;
+        node.indirect[i].offset = AppendBlock(&indirect, sizeof(indirect));
+    }
+    
     close(fd);
 
     // Construct BNode
@@ -178,53 +197,59 @@ ObjID *AddDirectory()
 
     while (1)
     {
-	memset(&entries[entry], 0, sizeof(BDirEntry));
-	tok = GetToken();
-	if (tok == TOKEN_FILE) {
-	    tok = GetToken();
-	    printf("FILE %s\n", tokenString);
-	    strncpy((char *)entries[entry].name, tokenString, MAXNAMELEN);
+        memset(&entries[entry], 0, sizeof(BDirEntry));
+        tok = GetToken();
+        if (tok == TOKEN_FILE) {
+            tok = GetToken();
+            printf("FILE %s\n", tokenString);
+            strncpy((char *)entries[entry].name, tokenString, MAXNAMELEN);
 
-	    tok = GetToken();
-	    ObjID *fobj = AddFile(tokenString);
-	    memcpy(&entries[entry].objId, fobj, sizeof(ObjID));
-	    free(fobj);
-	} else if (tok == TOKEN_DIR) {
-	    tok = GetToken();
-	    printf("DIR %s\n", tokenString);
-	    strncpy((char *)entries[entry].name, tokenString, MAXNAMELEN);
-	    ObjID *dobj = AddDirectory();
-	    memcpy(&entries[entry].objId, dobj, sizeof(ObjID));
-	    free(dobj);
-	} else if (tok == TOKEN_END) {
-	    printf("END\n");
-	    break;
-	} else if (tok == TOKEN_EOF) {
-	    printf("Unexpected end of file\n");
-	    exit(1);
-	} else {
-	    printf("Unknown token '%s'\n", tokenString);
-	    exit(1);
-	}
+            tok = GetToken();
+            ObjID *fobj = AddFile(tokenString);
+            memcpy(&entries[entry].objId, fobj, sizeof(ObjID));
+            free(fobj);
+        } else if (tok == TOKEN_DIR) {
+            tok = GetToken();
+            printf("DIR %s\n", tokenString);
+            strncpy((char *)entries[entry].name, tokenString, MAXNAMELEN);
+            ObjID *dobj = AddDirectory();
+            memcpy(&entries[entry].objId, dobj, sizeof(ObjID));
+            free(dobj);
+        } else if (tok == TOKEN_END) {
+            printf("END\n");
+            break;
+        } else if (tok == TOKEN_EOF) {
+            printf("Unexpected end of file\n");
+            exit(1);
+        } else {
+            printf("Unknown token '%s'\n", tokenString);
+            exit(1);
+        }
 
-	memcpy(entries[entry].magic, BDIR_MAGIC, 8);
-	// entries[entry].size ...
-	entries[entry].flags = 0;
-	entries[entry].ctime = (uint64_t)time(NULL);
-	entries[entry].mtime = (uint64_t)time(NULL);
-	strncpy((char *)entries[entry].user, "root", MAXUSERNAMELEN);
-	strncpy((char *)entries[entry].group, "root", MAXUSERNAMELEN);
+        memcpy(entries[entry].magic, BDIR_MAGIC, 8);
+        // entries[entry].size ...
+        entries[entry].flags = 0;
+        entries[entry].ctime = (uint64_t)time(NULL);
+        entries[entry].mtime = (uint64_t)time(NULL);
+        strncpy((char *)entries[entry].user, "root", MAXUSERNAMELEN);
+        strncpy((char *)entries[entry].group, "root", MAXUSERNAMELEN);
 
-	entry++;
+        entry++;
     }
 
     // Write Directory
-
     // Make sure we fit into a single indirect
     // block to simplify the logic below.
     uint64_t size = entry * sizeof(BDirEntry);
     assert(size < blockSize);
     uint64_t offset = AppendBlock(entries, size);
+
+    BInd indirectBlock;
+    memset(&indirectBlock, 0, sizeof(indirectBlock));
+    indirectBlock.direct[0].device = 0;
+    indirectBlock.direct[0].offset = offset;
+    
+    uint64_t indirectOffset = AppendBlock(&indirectBlock, sizeof(indirectBlock));
 
     // Write Inode
     memset(&node, 0, sizeof(node));
@@ -232,8 +257,8 @@ ObjID *AddDirectory()
     node.versionMajor = O2FS_VERSION_MAJOR;
     node.versionMinor = O2FS_VERSION_MINOR;
     node.size = size;
-    node.direct[0].device = 0;
-    node.direct[0].offset = offset;
+    node.indirect[0].device = 0;
+    node.indirect[0].offset = indirectOffset;
     uint64_t nodeoff = AppendBlock(&node, sizeof(node));
 
     memset(id, 0, sizeof(*id));
@@ -402,4 +427,3 @@ int main(int argc, char * const *argv)
 
     close(diskfd);
 }
-
